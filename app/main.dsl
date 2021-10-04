@@ -2,7 +2,6 @@ context
 {
     input phone: string;
     input name: string;
-    
 }
 
 // declare external functions here 
@@ -10,148 +9,110 @@ external function acknowledge(): string;
 external function resolve(): string;
 external function getstatusof( what:string? ): string;
 
-start node root
-{
-    do
-    {
+start node root {
+    do {
         #connectSafe($phone);
         wait *;
     }
-    transitions
-    {
+    transitions {
         hello: goto hello on true;        
     }
 }
 
-node hello
-{
-    do
-    {
+node hello {
+    do { 
         #sayText("Hello " + $name + "! This is Dasha calling you regarding your website. There has been an incident. "); 
         #sayText("You can acknowledge or resolve the incident right on the call with me. "); 
         #sayText(" Please note, I will listen and take notes until you mention that you are ready to resolve or acknowledge. ", interruptible:true);
         wait *;
     }
-    transitions
-    {
+    transitions {
     }
 }
 
-digression acknowledge
-{
+// acknowledge flow begins 
+digression acknowledge {
     conditions { on #messageHasIntent("acknowledge"); }
-    do
-    {
+    do {
         #sayText("Can you please confirm that you want me to acknowledge the incident?");
         wait *;
     } 
-    transitions 
-    {
+    transitions {
         acknowledge: goto acknowledge_2 on #messageHasIntent("yes");
         donotacknowledge: goto waiting on #messageHasIntent("no");
     }
 }
 
-node acknowledge_2 //make digression
-{
-    do
-    {
+node acknowledge_2 {
+    do {
         external acknowledge();
         #sayText("Got it. I have set the status in Better Uptime as acknowledged. The next step is to resolve the incident.");
-        #sayText("Would you like me to notify other team members that there is an incident which may affect them? ");
         wait *;
     } 
     transitions
     {
-        yes: goto notify on #messageHasIntent("yes");
-        no: goto waiting on #messageHasIntent("no");
     }
 }
 
-node notify
-{
-    do
-    {
-        #sayText("Okay. Team members notified. I will wait for you to let me know when incident is resolved. ");
+node waiting {
+    do{
+        #sayText("Okay. I will wait for your instructions then. ");
         wait *;
-    }
+    } 
 }
 
-digression resolve
-{
+
+// resolve flow begins 
+digression resolve {
     conditions { on #messageHasIntent("resolve"); }
-    do
-    {
+    do {
         #sayText("Can you please confirm that you want me to resolve the incident?");
         wait *;
     } 
-    transitions 
-    {
+    transitions {
         resolve: goto resolve_2 on #messageHasIntent("yes");
         donotresolve: goto waiting on #messageHasIntent("no");
 
     }
 }
 
-node resolve_2 
-{
-    do
-    {
+node resolve_2  {
+    do  {
         external resolve();
         #sayText("Well done " + $name + "! I have set the status in Better Uptime as resolved. Thank you and take care. Good bye. ");
         exit;
     } 
 }
 
-digression ignore
-{
+// ignore flow begins 
+digression ignore {
     conditions { on #messageHasIntent("ignore"); }
-    do
-    {
+    do {
         #sayText("Can you please confirm that you want me to ignore the incident?");
         wait *;
     } 
-    transitions 
-    {
+    transitions  {
         ignore: goto ignore_2 on #messageHasIntent("yes");
         donotignore: goto waiting on #messageHasIntent("no");
     }
 }
 
-node ignore_2
-{
-    do
-    {
-        #sayText("Okay. I will ignore the incident . This one is on you " + $name +". Good bye and good luck! ");
+node ignore_2 {
+    do {
+        #sayText("Okay. I will ignore the incident . This one is on you " + $name + ". Good bye and good luck! ");
         exit;
     } 
 }
 
-node waiting
-{
-    do
-    {
-        #sayText("Okay. I will wait for your instructions then. ");
-        wait *;
-    } 
-}
+//additional digressions
 
-digression journal 
-{
-    conditions { on true priority -1; }
-    do
-    {
-        return;
-    }
-}
 
-digression status // get status of vital services 
-{
+
+// get status of vital services 
+digression status  {
     conditions { on #messageHasIntent("status") && #messageHasData( "statusentity" ); }
-    do
-    {
-        for (var e in #messageGetData("statusentity") )
-        { 
+    do {
+        for (var e in #messageGetData("statusentity") ){ 
             var result = external getstatusof(e.value );
             #sayText( result );
         }
@@ -159,40 +120,45 @@ digression status // get status of vital services
     }
 }
 
-digression @wait
-{
+// additional digressions 
+digression @wait {
     conditions { on #messageHasAnyIntent(digression.@wait.triggers)  priority 900; }
     var triggers = ["wait", "wait_for_another_person"];
     var responses: Phrases[] = ["i_will_wait"];
-    do
-    {
-        for (var item in digression.@wait.responses)
-        {
+    do {
+        for (var item in digression.@wait.responses) {
             #say(item, repeatMode: "ignore");
         }
         #waitingMode(duration: 70000);
         return;
     }
-    transitions
-    {
+    transitions {
     }
 }
 
-digression repeat
-{
+// this digression tells Dasha to only respond to user replies that trigger an intent
+// this is a very helpful little piece of code for our particular use case because 
+// the user might talk to themselves as they are resolving the incident
+// everyting the user says to themselves is logged (thus: journal) in the transcript 
+// which can then be appended to the incident report 
+digression journal {
+    conditions { on true priority -1; }
+    do {
+        return;
+    }
+}
+
+digression repeat {
     conditions { on #messageHasIntent("repeat"); }
-    do
-    {
+    do {
         #repeat();
         return;
     }
 } 
 
-digression oops
-{
+digression oops {
     conditions { on #messageHasIntent("oops"); }
-    do
-    {
+    do {
         #sayText("What happened " + $name + "? Did you ue the wrong terminal again?");
         return;
     }
